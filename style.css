@@ -43,6 +43,7 @@ button:disabled { opacity: .5; cursor: default; }
 .sec.removed { opacity: .35; }
 .sec.removed .sec-body { display: none; }
 .sec-body p { margin: 0 0 0 0; text-indent: 1.3em; text-align: justify; }
+.sec-body p.quote { margin: 0.4em 0 0.4em 1.6em; text-indent: 0; font-size: 0.95em; }
 .sec-body p.center { text-align: center; text-indent: 0; }
 .sec-body p:focus { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .sec-body .notes { margin-top: 12px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: 15px; }

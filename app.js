@@ -1,6 +1,7 @@
 import { openPdf, pageImageCoverage, textLayerLines, renderPage, renderCover } from "./lib/pdfsource.js";
 import { createOcrPool } from "./lib/ocr.js";
-import { mergePage, buildVocab, selfCorrect } from "./lib/merge.js";
+import { loadDict } from "./lib/dict.js";
+import { reconcilePage, buildBookVocab, makeScorer, correctWord, needsRescan, applyRescan, finalConfidence, markFragments, shouldJoin } from "./lib/reconcile.js";
 import { analyze } from "./lib/layout.js";
 import { buildEpub } from "./lib/epub.js";
 import { normalizeText, hasMojibake, fixMojibake, textQuality, typography, escapeXml } from "./lib/turkish.js";
@@ -78,16 +79,18 @@ async function convert() {
   await keepAwake(true);
   const t0 = performance.now();
   const { doc, numPages } = state.pdf;
-  const mode = $("o-mode").value;
+  const mode = $("o-mode").value;            // "best" | "fast"
   const dpi = parseInt($("o-dpi").value, 10);
   const coverFirst = $("o-cover").checked;
+  const dictPromise = loadDict(new URL("lang/tr-words.txt.gz", location.href).href);
+  dictPromise.catch(() => {});
 
-  // 1) Metin katmanını incele
+  // 1) PDF'in kendi metnini incele
   const pages = [];
   let imagePages = 0, mojibake = 0;
   const allLayerWords = [];
   for (let i = 1; i <= numPages; i++) {
-    setStatus(`PDF inceleniyor: sayfa ${i}/${numPages}`, (i / numPages) * 0.08);
+    setStatus(`PDF inceleniyor: sayfa ${i}/${numPages}`, (i / numPages) * 0.05);
     const page = await doc.getPage(i);
     const cov = await pageImageCoverage(page).catch(() => 0);
     const tl = await textLayerLines(page);
@@ -108,87 +111,162 @@ async function convert() {
   const quality = textQuality(fixMoj ? allLayerWords.map(fixMojibake) : allLayerWords);
   const scanned = imagePages >= numPages * 0.5;
   const wordsPerPage = allLayerWords.length / Math.max(1, numPages);
-  let useOcr;
-  if (mode === "ocr") useOcr = true;
-  else if (mode === "text") useOcr = false;
-  else useOcr = scanned || quality < 0.9 || wordsPerPage < 25;
-  console.info({ scanned, quality, wordsPerPage, mojibake, useOcr });
+  const hasLayer = wordsPerPage >= 25 && quality > 0.5;
+  const layerTrusted = hasLayer && !scanned && quality >= 0.75;  // dijital PDF: harfler yazı tipinden gelir
+  const useOcr = mode === "best" || !layerTrusted || quality < 0.97;
+  console.info({ scanned, quality, wordsPerPage, mojibake, hasLayer, layerTrusted, useOcr });
 
   // 2) Kapak
   if (coverFirst) {
-    setStatus("Kapak hazırlanıyor…", 0.09);
+    setStatus("Kapak hazırlanıyor…", 0.05);
     state.cover = await renderCover(await doc.getPage(1)).catch(() => null);
   } else state.cover = null;
 
+  setStatus("Türkçe sözlük yükleniyor…", 0.05);
+  await dictPromise.catch((e) => console.warn("sözlük yok", e));
+
+  const stats = { fromLayer: 0, corrected: 0, rescannedLines: 0, rescanFixes: 0 };
+  let pool = null;
+  const work = pages.filter((p) => !(coverFirst && p.n === 1));
+
   // 3) OCR
-  let mergedChanges = 0;
   if (useOcr) {
     const size = poolSize();
-    const pool = await createOcrPool(size, (t) => setStatus(t, 0.1));
+    pool = await createOcrPool(size, (t) => setStatus(t, 0.06));
     let done = 0;
     const tStart = performance.now();
-    const queue = pages.filter((p) => !(coverFirst && p.n === 1)).map((p) => p.n);
+    const queue = work.map((p) => p.n);
     const total = queue.length;
     async function runner() {
       while (queue.length) {
         const n = queue.shift();
         const page = await doc.getPage(n);
+        const vp1 = page.getViewport({ scale: 1 });
         const { canvas } = await renderPage(page, { dpi, maxSide: dpi >= 400 ? 3400 : 2700 });
         const lines = await pool.recognize(canvas);
-        pages[n - 1].ocr = { lines, width: canvas.width, height: canvas.height };
+        pages[n - 1].ocr = { lines, width: canvas.width, height: canvas.height, pxPerPt: canvas.width / vp1.width };
         canvas.width = canvas.height = 0;
         page.cleanup();
         done++;
         const el = (performance.now() - tStart) / 1000;
-        const left = Math.max(0, (el / done) * (total - done));
-        setStatus(`Sayfalar okunuyor (Türkçe OCR): ${done}/${total} · kalan yaklaşık ${fmtTime(left)}`, 0.1 + (done / total) * 0.8);
+        setStatus(`1. tarama (Türkçe OCR): sayfa ${done}/${total} · kalan yaklaşık ${fmtTime((el / done) * (total - done))}`, 0.07 + (done / total) * 0.6);
       }
     }
     await Promise.all(Array.from({ length: size }, runner));
-    await pool.terminate();
+  }
 
-    // 4) Eski metin katmanıyla birleştir (taranmış ama içinde OCR metni olan PDF'ler)
-    const layerUseful = allLayerWords.length > numPages * 20 && quality > 0.6;
-    if (layerUseful) {
-      setStatus("Mevcut PDF metniyle karşılaştırılıyor…", 0.92);
-      const vocab = buildVocab(pages.map((p) => p.ocr || { lines: [] }));
-      for (const p of pages) {
-        if (!p.ocr) continue;
-        const words = p.ocr.lines.flatMap((l) => l.words);
-        mergedChanges += mergePage(words, p.layerText, vocab);
-        for (const l of p.ocr.lines) l.text = l.words.map((w) => w.t).join(" ");
-      }
+  const structPages = () => pages.map((p) => (p.ocr ? p.ocr : { lines: p.layer.lines, width: p.layer.width, height: p.layer.height }));
+  for (const p of structPages()) for (const l of p.lines) l.words.forEach((w) => (w.t = normalizeText(w.t)));
+
+  // 4) İki kaynağı karşılaştır
+  let score = makeScorer(buildBookVocab(structPages()));
+  if (useOcr && hasLayer) {
+    setStatus("OCR ile PDF metni kelime kelime karşılaştırılıyor…", 0.68);
+    for (const p of work) {
+      if (!p.ocr) continue;
+      stats.fromLayer += reconcilePage(p.ocr.lines, p.layerText, { score, layerTrusted });
+      await tick();
+    }
+    score = makeScorer(buildBookVocab(structPages()));
+  }
+
+  const allWords = () => structPages().flatMap((p) => p.lines.flatMap((l) => l.words));
+  markFragments(structPages());
+
+  // 6) Şüpheli satırları yüksek çözünürlükte yeniden tara
+  if (useOcr && mode === "best") {
+    const targets = [];
+    for (const p of work) {
+      if (!p.ocr) continue;
+      const ls = p.ocr.lines.filter((l) => l.words.some((w) => needsRescan(w, score)));
+      if (ls.length) targets.push({ p, ls });
+    }
+    const totalLines = Math.min(800, targets.reduce((n, t) => n + t.ls.length, 0));
+    let doneLines = 0;
+    const tStart = performance.now();
+    for (const { p, ls } of targets) {
+      if (doneLines >= totalLines) break;
+      const page = await doc.getPage(p.n);
+      const vp1 = page.getViewport({ scale: 1 });
+      const hiDpi = Math.min(dpi * 1.7, 520);
+      const { canvas } = await renderPage(page, { dpi: hiDpi, maxSide: 4400 });
+      const f = canvas.width / vp1.width / p.ocr.pxPerPt;
+      await Promise.all(ls.map(async (line) => {
+        if (doneLines >= totalLines) return;
+        const pad = line.h * 0.35;
+        const x = Math.max(0, (line.x0 - pad) * f), y = Math.max(0, (line.y0 - pad) * f);
+        const w = Math.min(canvas.width - x, (line.x1 - line.x0 + pad * 2) * f);
+        const h = Math.min(canvas.height - y, (line.y1 - line.y0 + pad * 2) * f);
+        if (w < 8 || h < 8) return;
+        const crop = document.createElement("canvas");
+        crop.width = Math.round(w); crop.height = Math.round(h);
+        const cx = crop.getContext("2d");
+        cx.fillStyle = "#fff"; cx.fillRect(0, 0, crop.width, crop.height);
+        cx.drawImage(canvas, x, y, w, h, 0, 0, crop.width, crop.height);
+        const words = await pool.recognizeLine(crop);
+        crop.width = crop.height = 0;
+        const n = applyRescan(line, words, score);
+        stats.rescanFixes += n;
+        doneLines++;
+        stats.rescannedLines++;
+        const el = (performance.now() - tStart) / 1000;
+        setStatus(`2. tarama (şüpheli satırlar): ${doneLines}/${totalLines} · kalan yaklaşık ${fmtTime((el / doneLines) * (totalLines - doneLines))}`, 0.74 + (doneLines / Math.max(1, totalLines)) * 0.22);
+      }));
+      canvas.width = canvas.height = 0;
+      page.cleanup();
     }
   }
+  if (pool) await pool.terminate();
 
-  if (useOcr) {
-    setStatus("Kitabın kendi kelimeleriyle son kontrol yapılıyor…", 0.94);
-    mergedChanges += selfCorrect(pages.map((p) => p.ocr || { lines: [] }));
-    for (const p of pages) if (p.ocr) for (const l of p.ocr.lines) l.text = l.words.map((w) => w.t).join(" ");
-  }
+  for (const p of structPages()) for (const l of p.lines) l.text = l.words.map((w) => w.t).join(" ");
 
   // Son sayfa arka kapak mı? (ISBN, barkod, fiyat) — kullanıcı seçmediyse otomatik
   if (!backTouched && numPages > 3) {
-    const last = pages[numPages - 1];
-    const txt = (useOcr && last.ocr ? last.ocr.lines.map((l) => l.text).join(" ") : last.layerText) || "";
+    const last = structPages()[numPages - 1];
+    const txt = last.lines.map((l) => l.text).join(" ");
     $("o-back").checked = /ISBN|97[89][\s\-–"“”]*\d{3}|\b\d+([.,]\d+)?\s?(TL|₺)\b/i.test(txt);
   }
 
-  // 5) Yapıyı çıkar
-  setStatus("Bölümler ve paragraflar düzenleniyor…", 0.95);
-  state.pages = pages.map((p) => (useOcr && p.ocr ? p.ocr : { lines: p.layer.lines, width: p.layer.width, height: p.layer.height }));
-  for (const p of state.pages) for (const l of p.lines) l.words.forEach((w) => (w.t = normalizeText(w.t)));
-  const { sections } = analyze(state.pages, { coverFirst, backCoverLast: $("o-back").checked });
+  // 8) Yapıyı çıkar
+  setStatus("Bölümler ve paragraflar düzenleniyor…", 0.97);
+  state.pages = structPages();
+  const { sections } = analyze(state.pages, { coverFirst, backCoverLast: $("o-back").checked, score });
+
+  // 7) Birleştirilmiş tam kelimeleri sözlük ve kitabın kendi kelimeleriyle düzelt
+  setStatus("Türkçe sözlükle kelimeler kontrol ediliyor…", 0.98);
+  score = makeScorer(buildBookVocab(state.pages));
+  const finalWords = [];
+  for (const s of sections) {
+    for (const p of s.paras) finalWords.push(...p.words);
+    for (const n of s.notes) for (const line of n.lines) finalWords.push(...line);
+  }
+  // konuşma dili "bi’" (bir): OCR'ın "b”", "b?", "bi”" diye okuduğu biçimler
+  for (const s of sections) for (const p of s.paras) p.words.forEach((w, i) => {
+    const next = p.words[i + 1];
+    const m = w.t.match(/^([“"‘']?)([bB])(i?)[”?"'’]$/);
+    if (m && next && /^[a-zçğıöşü]/.test(next.t) && (m[3] || w.c < 90)) { w.t = `${m[1]}${m[2]}i’`; w.c = Math.max(w.c, 85); }
+  });
+  let k = 0;
+  for (const w of finalWords) {
+    if (/[-‐¬]$/.test(w.t)) continue;
+    if (correctWord(w, score)) stats.corrected++;
+    finalConfidence(w, score);
+    if (++k % 3000 === 0) await tick();
+  }
   state.sections = sections;
+  state.score = score;
   renderPreview(sections);
 
   const secs = (performance.now() - t0) / 1000;
   const chapters = sections.filter((s) => s.kind === "chapter").length;
   const paras = sections.reduce((n, s) => n + s.paras.length, 0);
-  $("summary").textContent =
-    `${numPages} sayfa ${fmtTime(secs)} içinde işlendi · ${useOcr ? "Türkçe OCR ile okundu" : "PDF metni kullanıldı"}` +
-    `${fixMoj ? " · bozuk Türkçe harfler onarıldı" : ""}${mergedChanges ? ` · ${mergedChanges} düzeltme yapıldı` : ""}` +
-    ` · ${chapters} bölüm, ${paras} paragraf.`;
+  const parts = [`${numPages} sayfa ${fmtTime(secs)} içinde işlendi`];
+  parts.push(useOcr ? (hasLayer ? "OCR ve PDF metni karşılaştırıldı" : "Türkçe OCR ile okundu") : "PDF metni kullanıldı");
+  if (fixMoj) parts.push("bozuk Türkçe harfler onarıldı");
+  if (stats.corrected + stats.rescanFixes) parts.push(`${stats.corrected + stats.rescanFixes} kelime düzeltildi`);
+  if (stats.rescannedLines) parts.push(`${stats.rescannedLines} satır yeniden tarandı`);
+  parts.push(`${chapters} bölüm, ${paras} paragraf`);
+  $("summary").textContent = parts.join(" · ") + ".";
   setStatus("Bitti.", 1);
   $("step-run").classList.add("hidden");
   $("step-review").classList.remove("hidden");
@@ -196,6 +274,8 @@ async function convert() {
   $("go").disabled = false;
   keepAwake(false);
 }
+
+const tick = () => new Promise((r) => setTimeout(r, 0));
 
 function fmtTime(s) {
   s = Math.round(s);
@@ -226,9 +306,10 @@ function wordsToHtml(words) {
 function noteText(n) {
   const words = [];
   for (const line of n.lines) {
-    line.forEach((w) => {
+    line.forEach((w, j) => {
       const prev = words[words.length - 1];
       if (prev && /[A-Za-zçğıöşüÇĞİÖŞÜ]-$/.test(prev.t) && /^[a-zçğıöşü]/.test(w.t)) prev.t = prev.t.slice(0, -1) + w.t;
+      else if (j === 0 && prev && state.score && shouldJoin(prev.t, w.t, state.score)) prev.t = prev.t + w.t;
       else words.push({ ...w });
     });
   }

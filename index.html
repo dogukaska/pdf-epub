@@ -41,9 +41,8 @@
       <label class="row"><input type="checkbox" id="o-back"> Son sayfa arka kapak yazısı olsun</label>
       <label>Okuma yöntemi
         <select id="o-mode">
-          <option value="auto" selected>Otomatik (önerilen)</option>
-          <option value="ocr">Her zaman OCR ile oku (taranmış kitaplar)</option>
-          <option value="text">Sadece PDF'teki metni kullan (hızlı)</option>
+          <option value="best" selected>En yüksek doğruluk: iki kez tara, sözlükle kontrol et (önerilen)</option>
+          <option value="fast">Hızlı: tek tarama</option>
         </select>
       </label>
       <label>OCR kalitesi
@@ -62,7 +61,7 @@
     <h2><span class="num">3</span> Dönüştürülüyor</h2>
     <div class="bar"><div id="bar-fill"></div></div>
     <p id="status">Hazırlanıyor…</p>
-    <p class="hint">Taranmış kitaplarda her sayfa tek tek okunur; 100 sayfalık bir kitap bilgisayarda birkaç dakika, telefonda daha uzun sürebilir. Bu sekmeyi kapatma.</p>
+    <p class="hint">Her sayfa Türkçe OCR ile okunur, PDF'in kendi metniyle ve Türkçe sözlükle karşılaştırılır; emin olunamayan satırlar daha yüksek çözünürlükte yeniden taranır. 100 sayfalık bir kitap bilgisayarda birkaç dakika, telefonda daha uzun sürer. Bu sekmeyi kapatma.</p>
   </section>
 
   <section class="card hidden" id="step-review">
