@@ -47,7 +47,10 @@ $("go").addEventListener("click", () => convert().catch((e) => {
   console.error(e);
   setStatus("Bir hata oluştu: " + (e.message || e));
   $("go").disabled = false;
+  keepAwake(false);
+  if (activePool) { activePool.terminate().catch(() => {}); activePool = null; }
 }));
+let activePool = null;
 
 function setStatus(t, frac) {
   $("status").textContent = t;
@@ -132,7 +135,7 @@ async function convert() {
   // 3) OCR
   if (useOcr) {
     const size = poolSize();
-    pool = await createOcrPool(size, (t) => setStatus(t, 0.06));
+    pool = activePool = await createOcrPool(size, (t) => setStatus(t, 0.06));
     let done = 0;
     const tStart = performance.now();
     const queue = work.map((p) => p.n);
@@ -184,15 +187,17 @@ async function convert() {
     const totalLines = Math.min(800, targets.reduce((n, t) => n + t.ls.length, 0));
     let doneLines = 0;
     const tStart = performance.now();
-    for (const { p, ls } of targets) {
-      if (doneLines >= totalLines) break;
+    let budget = totalLines;
+    for (const { p, ls: all } of targets) {
+      if (budget <= 0) break;
+      const ls = all.slice(0, budget);
+      budget -= ls.length;
       const page = await doc.getPage(p.n);
       const vp1 = page.getViewport({ scale: 1 });
       const hiDpi = Math.min(dpi * 1.7, 520);
       const { canvas } = await renderPage(page, { dpi: hiDpi, maxSide: 4400 });
       const f = canvas.width / vp1.width / p.ocr.pxPerPt;
       await Promise.all(ls.map(async (line) => {
-        if (doneLines >= totalLines) return;
         const pad = line.h * 0.35;
         const x = Math.max(0, (line.x0 - pad) * f), y = Math.max(0, (line.y0 - pad) * f);
         const w = Math.min(canvas.width - x, (line.x1 - line.x0 + pad * 2) * f);
@@ -203,10 +208,10 @@ async function convert() {
         const cx = crop.getContext("2d");
         cx.fillStyle = "#fff"; cx.fillRect(0, 0, crop.width, crop.height);
         cx.drawImage(canvas, x, y, w, h, 0, 0, crop.width, crop.height);
-        const words = await pool.recognizeLine(crop);
+        // tek satırın okunamaması tüm dönüşümü durdurmasın
+        const words = await pool.recognizeLine(crop).catch((e) => { console.warn("satır okunamadı", e); return null; });
         crop.width = crop.height = 0;
-        const n = applyRescan(line, words, score);
-        stats.rescanFixes += n;
+        if (words) stats.rescanFixes += applyRescan(line, words, score);
         doneLines++;
         stats.rescannedLines++;
         const el = (performance.now() - tStart) / 1000;
@@ -216,7 +221,7 @@ async function convert() {
       page.cleanup();
     }
   }
-  if (pool) await pool.terminate();
+  if (pool) { await pool.terminate(); activePool = null; }
 
   for (const p of structPages()) for (const l of p.lines) l.text = l.words.map((w) => w.t).join(" ");
 
