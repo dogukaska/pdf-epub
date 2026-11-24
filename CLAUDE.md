@@ -2,12 +2,12 @@
 
 Bu hesaptaki bütün uygulamalar (ana menü dogukaska.github.io dahil) aynı görünümde olmalı:
 
-- **Yalnızca siyah ve beyaz.** Renkli vurgu, renkli düğme, renkli simge yok. Gri tonları serbest.
+- **Yalnızca antrasit ve kırık beyaz** (tam siyah #000 ve tam beyaz #fff değil; gözü yormasın). Renkli vurgu, renkli düğme, renkli simge yok. Gri tonları serbest. Antrasit `#2e3033`, kırık beyaz `#faf9f6`, zemin `#efede8`, koyu mod zemini `#1f2022`.
 - **Sade ve minimal**, ama göze hoş gelen: bol boşluk, ince çizgiler, yumuşak köşeler.
 - **Cam görünüm:** kartlar yarı saydam beyaz (koyu modda yarı saydam siyah), `backdrop-filter: blur`, ince açık kenar, yumuşak gölge. Arka plan hafif gri tonlu ışık geçişi.
 - **Simgeler:** emoji yok. İnce çizgili SVG (stroke 1.5, `currentColor`).
-- **Ana düğme:** dolu siyah (koyu modda dolu beyaz), hap şeklinde. Diğer düğmeler cam/çerçeveli.
-- **Ana ekran simgesi:** siyah kare zemin üzerinde beyaz ince çizgili simge (apple-touch-icon 180 px, gerekirse manifest simgeleri).
+- **Ana düğme:** dolu antrasit (koyu modda dolu kırık beyaz), hap şeklinde. Diğer düğmeler cam/çerçeveli.
+- **Ana ekran simgesi:** antrasit kare zemin üzerinde kırık beyaz ince çizgili simge (apple-touch-icon 180 px, gerekirse manifest simgeleri).
 - Açık ve koyu mod ikisi de desteklenir (`prefers-color-scheme`).
 - Renk değişkenleri `dogukaska.github.io/style.css` içindekiyle aynı: `--bg --ink --mute --glass --glass-edge --shadow --solid --solid-ink`.
 - Arayüz dili Türkçe. Kullanıcı İngilizce bilmiyor; metinler kısa ve sade.
