@@ -8,7 +8,7 @@ Bu hesaptaki bütün uygulamalar (ana menü dogukaska.github.io dahil) aynı gö
 - **Simgeler:** emoji yok. İnce çizgili SVG (stroke 1.5, `currentColor`).
 - **Ana düğme:** dolu antrasit (koyu modda dolu kırık beyaz), hap şeklinde. Diğer düğmeler cam/çerçeveli.
 - **Ana ekran simgesi:** antrasit kare zemin üzerinde kırık beyaz ince çizgili simge (apple-touch-icon 180 px, gerekirse manifest simgeleri).
-- Açık ve koyu mod ikisi de desteklenir (`prefers-color-scheme`).
+- Açık ve koyu mod ikisi de desteklenir. Sağ üstte güneş/ay düğmesi (`theme.js`, bütün uygulamalarda aynı dosya). Seçim `localStorage` "tema" anahtarında, tüm uygulamalarda ortak; seçim yoksa cihaz ayarı. CSS: koyu değişkenler hem `@media (prefers-color-scheme: dark) :root:not([data-theme="light"])` hem `:root[data-theme="dark"]` içinde.
 - Renk değişkenleri `dogukaska.github.io/style.css` içindekiyle aynı: `--bg --ink --mute --glass --glass-edge --shadow --solid --solid-ink`.
 - Arayüz dili Türkçe. Kullanıcı İngilizce bilmiyor; metinler kısa ve sade.
 - Her uygulamanın üstünde ana menüye dönen "Uygulamalar" bağlantısı (`href="/"`) olur.

@@ -1,17 +1,26 @@
 /* Tasarım: siyah-beyaz, sade, cam görünüm (dogukaska.github.io ile aynı değişkenler) */
 :root {
+  color-scheme: light;
   --bg: #efede8; --ink: #2e3033; --muted: #75736e; --line: rgba(0,0,0,.1);
   --glass: rgba(250,249,246,.55); --glass-edge: rgba(250,249,246,.85); --shadow: 0 8px 28px rgba(0,0,0,.07);
   --solid: #2e3033; --solid-ink: #faf9f6; --soft: rgba(0,0,0,.05); --mark: rgba(0,0,0,.12);
   --halo-a: #faf9f6; --halo-b: #dcd9d3; --radius: 18px;
 }
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
     --bg: #1f2022; --ink: #ecebe7; --muted: #9b9993; --line: rgba(255,255,255,.12);
     --glass: rgba(255,255,255,.06); --glass-edge: rgba(255,255,255,.14); --shadow: 0 8px 28px rgba(0,0,0,.5);
     --solid: #ecebe7; --solid-ink: #2a2c2f; --soft: rgba(255,255,255,.07); --mark: rgba(255,255,255,.2);
     --halo-a: #36383b; --halo-b: #1f2022;
   }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1f2022; --ink: #ecebe7; --muted: #9b9993; --line: rgba(255,255,255,.12);
+    --glass: rgba(255,255,255,.06); --glass-edge: rgba(255,255,255,.14); --shadow: 0 8px 28px rgba(0,0,0,.5);
+    --solid: #ecebe7; --solid-ink: #2a2c2f; --soft: rgba(255,255,255,.07); --mark: rgba(255,255,255,.2);
+    --halo-a: #36383b; --halo-b: #1f2022;
 }
 * { box-sizing: border-box; }
 body {
