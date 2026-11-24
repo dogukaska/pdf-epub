@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF → EPUB · Türkçe karakterlere duyarlı dönüştürücü</title>
+<meta name="description" content="Taranmış ya da dijital PDF kitapları Türkçe karakterleri bozmadan e-okuyucular için EPUB'a çevirir. Her şey tarayıcınızda çalışır.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+<link rel="stylesheet" href="style.css">
+<script src="vendor/jszip.min.js"></script>
+<script src="vendor/tesseract/tesseract.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <h1>PDF → EPUB</h1>
+  <p class="tag">Türkçe karakterleri (ı, İ, ş, ğ, ç, ö, ü) bozmadan, e-okuyucuda rahat okunacak EPUB.</p>
+</header>
+
+<main>
+  <section class="card" id="step-file">
+    <h2><span class="num">1</span> PDF dosyasını seç</h2>
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept="application/pdf,.pdf" hidden>
+      <span class="drop-icon">📄</span>
+      <span id="drop-text">Dosya seçmek için dokun ya da buraya sürükle</span>
+    </label>
+    <p class="hint">Dosyan hiçbir yere yüklenmez; tüm işlem bu cihazın tarayıcısında yapılır.</p>
+  </section>
+
+  <section class="card hidden" id="step-opts">
+    <h2><span class="num">2</span> Kitap bilgileri</h2>
+    <div class="grid">
+      <label>Kitap adı<input id="m-title" type="text"></label>
+      <label>Yazar<input id="m-author" type="text"></label>
+      <label>Çevirmen <small>(isteğe bağlı)</small><input id="m-translator" type="text"></label>
+      <label>Yayınevi <small>(isteğe bağlı)</small><input id="m-publisher" type="text"></label>
+    </div>
+    <details class="adv">
+      <summary>Gelişmiş ayarlar</summary>
+      <label class="row"><input type="checkbox" id="o-cover" checked> 1. sayfa kapak resmi olsun</label>
+      <label class="row"><input type="checkbox" id="o-back"> Son sayfa arka kapak yazısı olsun</label>
+      <label>Okuma yöntemi
+        <select id="o-mode">
+          <option value="auto" selected>Otomatik (önerilen)</option>
+          <option value="ocr">Her zaman OCR ile oku (taranmış kitaplar)</option>
+          <option value="text">Sadece PDF'teki metni kullan (hızlı)</option>
+        </select>
+      </label>
+      <label>OCR kalitesi
+        <select id="o-dpi">
+          <option value="300" selected>Yüksek (300 dpi, önerilen)</option>
+          <option value="400">Çok yüksek (400 dpi, yavaş)</option>
+          <option value="220">Hızlı (220 dpi, telefonlar için)</option>
+        </select>
+      </label>
+    </details>
+    <p id="pdf-info" class="hint"></p>
+    <button class="primary" id="go">Dönüştür</button>
+  </section>
+
+  <section class="card hidden" id="step-run">
+    <h2><span class="num">3</span> Dönüştürülüyor</h2>
+    <div class="bar"><div id="bar-fill"></div></div>
+    <p id="status">Hazırlanıyor…</p>
+    <p class="hint">Taranmış kitaplarda her sayfa tek tek okunur; 100 sayfalık bir kitap bilgisayarda birkaç dakika, telefonda daha uzun sürebilir. Bu sekmeyi kapatma.</p>
+  </section>
+
+  <section class="card hidden" id="step-review">
+    <h2><span class="num">4</span> Kontrol et ve indir</h2>
+    <p id="summary"></p>
+    <div class="actions">
+      <button class="primary" id="download">EPUB'ı indir</button>
+      <button id="next-low" title="Okuma motorunun emin olmadığı bir sonraki kelimeye git">Şüpheli kelime: <span id="low-count">0</span> ›</button>
+      <button id="restart">Yeni dosya</button>
+    </div>
+    <p class="hint">Aşağıdaki metne dokunup düzeltme yapabilirsin. <mark>Sarı</mark> kelimeler okuma motorunun emin olmadığı yerlerdir. Bölüm adlarını da değiştirebilir, istemediğin bölümü silebilirsin.</p>
+    <div id="preview"></div>
+  </section>
+</main>
+
+<footer>
+  <p>Açık kaynak · Tesseract OCR (Türkçe), PDF.js ve JSZip kullanır · <a href="https://github.com/renkistan/pdf-epub">GitHub</a></p>
+</footer>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
