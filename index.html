@@ -5,14 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>PDF → EPUB · Türkçe karakterlere duyarlı dönüştürücü</title>
 <meta name="description" content="Taranmış ya da dijital PDF kitapları Türkçe karakterleri bozmadan e-okuyucular için EPUB'a çevirir. Her şey tarayıcınızda çalışır.">
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📖</text></svg>">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="theme-color" content="#f2f2f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)">
 <link rel="stylesheet" href="style.css">
 <script src="vendor/jszip.min.js"></script>
 <script src="vendor/tesseract/tesseract.min.js"></script>
 </head>
 <body>
 <header class="top">
-  <a class="home" href="/">← Uygulamalar</a>
+  <a class="home" href="/"><svg class="ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 12H5"/><path d="m12 19-7-7 7-7"/></svg> Uygulamalar</a>
   <h1>PDF → EPUB</h1>
   <p class="tag">Türkçe karakterleri (ı, İ, ş, ğ, ç, ö, ü) bozmadan, e-okuyucuda rahat okunacak EPUB.</p>
 </header>
@@ -22,7 +25,7 @@
     <h2><span class="num">1</span> PDF dosyasını seç</h2>
     <label class="drop" id="drop">
       <input type="file" id="file" accept="application/pdf,.pdf" hidden>
-      <span class="drop-icon">📄</span>
+      <span class="drop-icon"><svg class="ic" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M20 15v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4"/></svg></span>
       <span id="drop-text">Dosya seçmek için dokun ya da buraya sürükle</span>
     </label>
     <p class="hint">Dosyan hiçbir yere yüklenmez; tüm işlem bu cihazın tarayıcısında yapılır.</p>
@@ -73,7 +76,7 @@
       <button id="next-low" title="Okuma motorunun emin olmadığı bir sonraki kelimeye git">Şüpheli kelime: <span id="low-count">0</span> ›</button>
       <button id="restart">Yeni dosya</button>
     </div>
-    <p class="hint">Aşağıdaki metne dokunup düzeltme yapabilirsin. <mark>Sarı</mark> kelimeler okuma motorunun emin olmadığı yerlerdir. Bölüm adlarını da değiştirebilir, istemediğin bölümü silebilirsin.</p>
+    <p class="hint">Aşağıdaki metne dokunup düzeltme yapabilirsin. <mark>İşaretli</mark> kelimeler okuma motorunun emin olmadığı yerlerdir. Bölüm adlarını da değiştirebilir, istemediğin bölümü silebilirsin.</p>
     <div id="preview"></div>
   </section>
 </main>
