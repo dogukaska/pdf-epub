@@ -21,7 +21,7 @@ Uygulama her kitabı **iki kez tarar ve üç kaynakla doğrular**:
 ## Yayınlama (GitHub Pages)
 
 Depo ayarlarında **Settings → Pages → Branch: `main` / `(root)` → Save**. Birkaç dakika sonra uygulama
-`https://renkistan.github.io/pdf-epub/` adresinde açılır.
+`https://dogukaska.github.io/pdf-epub/` adresinde açılır.
 
 Yerelde denemek için: `python3 -m http.server` ve tarayıcıda `http://localhost:8000`.
 
