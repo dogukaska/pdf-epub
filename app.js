@@ -465,3 +465,25 @@ function asciiName(s) {
 }
 
 $("restart").addEventListener("click", () => location.reload());
+
+// Belge Tarayıcı'dan "EPUB'a çevir" ile gelen kitap (aynı adres, ortak depo)
+(async () => {
+  if (new URLSearchParams(location.search).get("kaynak") !== "belge") return;
+  history.replaceState(null, "", location.pathname);
+  try {
+    const db = await new Promise((res, rej) => {
+      const r = indexedDB.open("paylasim", 1);
+      r.onupgradeneeded = () => r.result.createObjectStore("dosyalar");
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    });
+    const item = await new Promise((res, rej) => {
+      const t = db.transaction("dosyalar", "readwrite");
+      const s = t.objectStore("dosyalar");
+      const g = s.get("son");
+      g.onsuccess = () => { res(g.result); s.delete("son"); };
+      g.onerror = () => rej(g.error);
+    });
+    if (item && item.blob) pickFile(new File([item.blob], item.name || "kitap.pdf", { type: "application/pdf" }));
+  } catch (e) { console.error(e); }
+})();
