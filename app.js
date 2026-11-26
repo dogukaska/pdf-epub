@@ -1,10 +1,10 @@
-import { openPdf, pageImageCoverage, textLayerLines, renderPage, renderCover } from "./lib/pdfsource.js";
-import { createOcrPool } from "./lib/ocr.js";
-import { loadDict } from "./lib/dict.js";
-import { reconcilePage, buildBookVocab, makeScorer, correctWord, needsRescan, applyRescan, finalConfidence, markFragments, shouldJoin } from "./lib/reconcile.js";
-import { analyze } from "./lib/layout.js";
-import { buildEpub } from "./lib/epub.js";
-import { normalizeText, hasMojibake, fixMojibake, textQuality, typography, escapeXml } from "./lib/turkish.js";
+import { openPdf, pageImageCoverage, textLayerLines, renderPage, renderCover } from "./lib/pdfsource.js?v=20261126e";
+import { createOcrPool } from "./lib/ocr.js?v=20261126e";
+import { loadDict } from "./lib/dict.js?v=20261126e";
+import { reconcilePage, buildBookVocab, makeScorer, correctWord, needsRescan, applyRescan, finalConfidence, markFragments, shouldJoin } from "./lib/reconcile.js?v=20261126e";
+import { analyze } from "./lib/layout.js?v=20261126e";
+import { buildEpub } from "./lib/epub.js?v=20261126e";
+import { normalizeText, hasMojibake, fixMojibake, textQuality, typography, escapeXml } from "./lib/turkish.js?v=20261126e";
 
 const $ = (id) => document.getElementById(id);
 const state = { file: null, pdf: null, pages: null, cover: null, sections: null };
@@ -34,7 +34,7 @@ async function pickFile(file) {
   for (const id of ["step-opts", "step-run", "step-review"]) $(id).classList.add("hidden");
   $("preview").replaceChildren();
   for (const id of ["m-title", "m-author", "m-translator", "m-publisher"]) $(id).value = "";
-  $("o-back").checked = backTouched = false;
+  $("o-back").checked = false;
   previous?.doc.destroy().catch(console.error);
   $("drop-text").textContent = `${file.name} açılıyor…`;
   $("file-status").textContent = "";
@@ -68,8 +68,6 @@ async function pickFile(file) {
 }
 
 // ---------- Dönüştürme
-let backTouched = false;
-$("o-back").addEventListener("change", () => (backTouched = true));
 $("go").addEventListener("click", async () => {
   if (converting || !state.pdf) return;
   converting = $("file").disabled = $("go").disabled = true;
@@ -104,7 +102,8 @@ function poolSize() {
   const mem = navigator.deviceMemory || 4;
   const mobile = /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
   let n = Math.max(1, Math.min(4, cores - 1));
-  if (mobile || mem <= 4) n = Math.min(n, 2);
+  if (mobile || mem <= 2) return 1;
+  if (mem <= 4) n = Math.min(n, 2);
   return n;
 }
 
@@ -123,34 +122,40 @@ async function convert() {
 
   // 1) PDF'in kendi metnini incele
   const pages = [];
-  let imagePages = 0, mojibake = 0;
-  const allLayerWords = [];
+  let repairedPages = 0;
   for (let i = 1; i <= numPages; i++) {
     setStatus(`PDF inceleniyor: sayfa ${i}/${numPages}`, (i / numPages) * 0.05);
     const page = await doc.getPage(i);
     const cov = await pageImageCoverage(page).catch(() => 0);
-    const tl = await textLayerLines(page);
-    const raw = tl.lines.map((l) => l.text).join("\n");
-    mojibake += hasMojibake(raw);
-    if (cov > 0.6) imagePages++;
-    pages.push({ n: i, cov, layer: tl, layerText: raw });
-    if (i > (coverFirst ? 1 : 0)) allLayerWords.push(...raw.split(/\s+/).filter(Boolean));
-    page.cleanup();
-  }
-  const fixMoj = mojibake > 5;
-  if (fixMoj) {
-    for (const p of pages) {
-      p.layerText = fixMojibake(p.layerText);
-      for (const l of p.layer.lines) { l.text = fixMojibake(l.text); l.words.forEach((w) => (w.t = fixMojibake(w.t))); }
+    try {
+      const layer = await textLayerLines(page).catch(() => {
+        const {width,height} = page.getViewport({scale:1});
+        return {lines:[],width,height};
+      });
+      const raw = layer.lines.map(l => l.text).join("\n");
+      if (hasMojibake(raw) >= 2) {
+        repairedPages++;
+        for (const line of layer.lines) {
+          for (const word of line.words) word.t = fixMojibake(word.t);
+          line.text = line.words.map(w => w.t).join(" ");
+        }
+      }
+      const layerText = layer.lines.map(l => l.text).join("\n");
+      const words = layer.lines.flatMap(line => line.words);
+      const quality = textQuality(words.map(w => w.t));
+      const trusted = cov < .55 && (words.length >= 12 || cov < .15) && words.length > 0 && quality >= .84
+        && !/[\uE000-\uF8FF\uFFFD]/u.test(layerText)
+        && hasMojibake(layerText) === 0;
+      if (trusted) words.forEach(word => { word.agree = true; });
+      pages.push({ n:i, layer, layerText, trusted, usefulLayer:words.length >= 5 && quality > .45 });
+    } finally {
+      page.cleanup();
     }
   }
-  const quality = textQuality(fixMoj ? allLayerWords.map(fixMojibake) : allLayerWords);
-  const scanned = imagePages >= numPages * 0.5;
-  const wordsPerPage = allLayerWords.length / Math.max(1, numPages);
-  const hasLayer = wordsPerPage >= 25 && quality > 0.5;
-  const layerTrusted = hasLayer && !scanned && quality >= 0.75;  // dijital PDF: harfler yazı tipinden gelir
-  const useOcr = mode === "best" || !layerTrusted || quality < 0.97;
-  console.info({ scanned, quality, wordsPerPage, mojibake, hasLayer, layerTrusted, useOcr });
+  const work = pages.filter(p => !(coverFirst && p.n === 1));
+  if (!work.length) throw Error("Bu PDF tek sayfalı. Metni çevirmek için kapak seçimini kaldır.");
+  const scanPages = work.filter(p => !p.trusted);
+  const useOcr = scanPages.length > 0;
 
   // 2) Kapak
   if (coverFirst) {
@@ -163,32 +168,37 @@ async function convert() {
 
   const stats = { fromLayer: 0, corrected: 0, rescannedLines: 0, rescanFixes: 0 };
   let pool = null;
-  const work = pages.filter((p) => !(coverFirst && p.n === 1));
 
   // 3) OCR
   if (useOcr) {
-    const size = poolSize();
+    const size = Math.min(poolSize(), scanPages.length);
     pool = activePool = await createOcrPool(size, (t) => setStatus(t, 0.06));
     let done = 0;
     const tStart = performance.now();
-    const queue = work.map((p) => p.n);
+    const queue = [...scanPages];
     const total = queue.length;
     async function runner() {
       while (queue.length) {
-        const n = queue.shift();
-        const page = await doc.getPage(n);
-        const vp1 = page.getViewport({ scale: 1 });
-        const { canvas } = await renderPage(page, { dpi, maxSide: dpi >= 400 ? 3400 : 2700 });
-        const lines = await pool.recognize(canvas);
-        pages[n - 1].ocr = { lines, width: canvas.width, height: canvas.height, pxPerPt: canvas.width / vp1.width };
-        canvas.width = canvas.height = 0;
-        page.cleanup();
+        const item = queue.shift();
+        const page = await doc.getPage(item.n);
+        let canvas;
+        try {
+          const raster = await renderPage(page, { dpi, maxSide: dpi >= 400 ? 3400 : 2700 });
+          canvas = raster.canvas;
+          const lines = await pool.recognize(canvas);
+          if (lines.length) item.ocr = {lines, width:canvas.width, height:canvas.height, pxPerPt:raster.scale};
+        } finally {
+          if (canvas) canvas.width = canvas.height = 0;
+          page.cleanup();
+        }
         done++;
         const el = (performance.now() - tStart) / 1000;
         setStatus(`1. tarama (Türkçe OCR): sayfa ${done}/${total} · kalan yaklaşık ${fmtTime((el / done) * (total - done))}`, 0.07 + (done / total) * 0.6);
       }
     }
-    await Promise.all(Array.from({ length: size }, runner));
+    const completed = await Promise.allSettled(Array.from({ length: size }, runner));
+    const failure = completed.find(result => result.status === "rejected");
+    if (failure) throw failure.reason;
   }
 
   const structPages = () => pages.map((p) => (p.ocr ? p.ocr : { lines: p.layer.lines, width: p.layer.width, height: p.layer.height }));
@@ -196,17 +206,16 @@ async function convert() {
 
   // 4) İki kaynağı karşılaştır
   let score = makeScorer(buildBookVocab(structPages()));
-  if (useOcr && hasLayer) {
+  if (scanPages.some(p => p.ocr && p.usefulLayer)) {
     setStatus("OCR ile PDF metni kelime kelime karşılaştırılıyor…", 0.68);
     for (const p of work) {
-      if (!p.ocr) continue;
-      stats.fromLayer += reconcilePage(p.ocr.lines, p.layerText, { score, layerTrusted });
+      if (!p.ocr || !p.usefulLayer) continue;
+      stats.fromLayer += reconcilePage(p.ocr.lines, p.layerText, { score, layerTrusted:false });
       await tick();
     }
     score = makeScorer(buildBookVocab(structPages()));
   }
 
-  const allWords = () => structPages().flatMap((p) => p.lines.flatMap((l) => l.words));
   markFragments(structPages());
 
   // 6) Şüpheli satırları yüksek çözünürlükte yeniden tara
@@ -226,10 +235,9 @@ async function convert() {
       const ls = all.slice(0, budget);
       budget -= ls.length;
       const page = await doc.getPage(p.n);
-      const vp1 = page.getViewport({ scale: 1 });
       const hiDpi = Math.min(dpi * 1.7, 520);
-      const { canvas } = await renderPage(page, { dpi: hiDpi, maxSide: 4400 });
-      const f = canvas.width / vp1.width / p.ocr.pxPerPt;
+      const { canvas, scale } = await renderPage(page, { dpi: hiDpi, maxSide: 4400 });
+      const f = scale / p.ocr.pxPerPt;
       await Promise.all(ls.map(async (line) => {
         const pad = line.h * 0.35;
         const x = Math.max(0, (line.x0 - pad) * f), y = Math.max(0, (line.y0 - pad) * f);
@@ -258,17 +266,20 @@ async function convert() {
 
   for (const p of structPages()) for (const l of p.lines) l.text = l.words.map((w) => w.t).join(" ");
 
-  // Son sayfa arka kapak mı? (ISBN, barkod, fiyat) — kullanıcı seçmediyse otomatik
-  if (!backTouched && numPages > 3) {
-    const last = structPages()[numPages - 1];
-    const txt = last.lines.map((l) => l.text).join(" ");
-    $("o-back").checked = /ISBN|97[89][\s\-–"“”]*\d{3}|\b\d+([.,]\d+)?\s?(TL|₺)\b/i.test(txt);
-  }
+  if (!work.some(p => (p.ocr || p.layer).lines.length)) throw Error("Okunabilir metin bulunamadı. Daha net bir PDF dene.");
 
   // 8) Yapıyı çıkar
   setStatus("Bölümler ve paragraflar düzenleniyor…", 0.97);
-  state.pages = structPages();
+  state.pages = pages.map(p => {
+    if (!p.ocr) return p.layer;
+    const { lines,width,height,pxPerPt } = p.ocr;
+    const size = key => key / pxPerPt;
+    return {width:size(width),height:size(height),lines:lines.map(l => ({
+      ...l, x0:size(l.x0), x1:size(l.x1), y0:size(l.y0), y1:size(l.y1), h:size(l.h),
+    }))};
+  });
   const { sections } = analyze(state.pages, { coverFirst, backCoverLast: $("o-back").checked, score });
+  if (!sections.some(s => s.paras.some(p => p.words.length) || s.notes.length)) throw Error("EPUB oluşturmak için okunabilir metin bulunamadı.");
 
   // 7) Birleştirilmiş tam kelimeleri sözlük ve kitabın kendi kelimeleriyle düzelt
   setStatus("Türkçe sözlükle kelimeler kontrol ediliyor…", 0.98);
@@ -282,7 +293,7 @@ async function convert() {
   for (const s of sections) for (const p of s.paras) p.words.forEach((w, i) => {
     const next = p.words[i + 1];
     const m = w.t.match(/^([“"‘']?)([bB])(i?)[”?"'’]$/);
-    if (m && next && /^[a-zçğıöşü]/.test(next.t) && (m[3] || w.c < 90)) { w.t = `${m[1]}${m[2]}i’`; w.c = Math.max(w.c, 85); }
+    if (!w.agree && m && next && /^[a-zçğıöşü]/.test(next.t) && (m[3] || w.c < 90)) { w.t = `${m[1]}${m[2]}i’`; w.c = Math.max(w.c, 85); }
   });
   let k = 0;
   for (const w of finalWords) {
@@ -299,8 +310,11 @@ async function convert() {
   const chapters = sections.filter((s) => s.kind === "chapter").length;
   const paras = sections.reduce((n, s) => n + s.paras.length, 0);
   const parts = [`${numPages} sayfa ${fmtTime(secs)} içinde işlendi`];
-  parts.push(useOcr ? (hasLayer ? "OCR ve PDF metni karşılaştırıldı" : "Türkçe OCR ile okundu") : "PDF metni kullanıldı");
-  if (fixMoj) parts.push("bozuk Türkçe harfler onarıldı");
+  if (work.length > scanPages.length) parts.push(`${work.length - scanPages.length} sayfada PDF metni korundu`);
+  if (useOcr) parts.push(`${scanPages.length} sayfa Türkçe OCR ile incelendi`);
+  if (repairedPages) parts.push(`${repairedPages} sayfada Türkçe kodlama düzeltildi`);
+  const missing = work.filter(p => !(p.ocr || p.layer).lines.length).map(p => p.n);
+  if (missing.length) parts.push(`metin bulunamayan sayfalar: ${missing.slice(0, 12).join(", ")}${missing.length > 12 ? "…" : ""}`);
   if (stats.corrected + stats.rescanFixes) parts.push(`${stats.corrected + stats.rescanFixes} kelime düzeltildi`);
   if (stats.rescannedLines) parts.push(`${stats.rescannedLines} satır yeniden tarandı`);
   parts.push(`${chapters} bölüm, ${paras} paragraf`);
@@ -322,7 +336,7 @@ function fmtTime(s) {
 // ---------- Önizleme (düzenlenebilir)
 const LOW = 72;
 
-function wordsToHtml(words) {
+function wordsToHtml(words, noteLabels = new Map()) {
   // \u0001/\u0002: şüpheli kelime sınırı, \u0003n\u0003: dipnot işareti
   const parts = words.map((w) => {
     let t = w.t;
@@ -330,12 +344,12 @@ function wordsToHtml(words) {
       const pos = Math.min(w.refPos ?? t.length, t.length);
       t = t.slice(0, pos) + `\u0003${w.ref}\u0003` + t.slice(pos);
     }
-    return w.c < LOW && !w.fixed ? `\u0001${t}\u0002` : t;
+    return w.c < LOW && !w.fixed ? `\u0001${w.p || 0}\u0001${t}\u0002` : t;
   });
   let s = typography(parts.join(" "));
   s = escapeXml(s);
-  s = s.replace(/\u0001/g, "<mark>").replace(/\u0002/g, "</mark>");
-  s = s.replace(/\u0003(\d+)\u0003/g, '<sup class="ref" contenteditable="false" data-ref="$1">*</sup>');
+  s = s.replace(/\u0001(\d+)\u0001/g,'<mark data-page="$1">').replace(/\u0002/g,"</mark>");
+  s = s.replace(/\u0003(\d+)\u0003/g,(_,id) => `<sup class="ref" contenteditable="false" data-ref="${id}">${escapeXml(noteLabels.get(Number(id)) || "*")}</sup>`);
   return s;
 }
 
@@ -344,9 +358,9 @@ function noteText(n) {
   for (const line of n.lines) {
     line.forEach((w, j) => {
       const prev = words[words.length - 1];
-      if (prev && /[A-Za-zçğıöşüÇĞİÖŞÜ]-$/.test(prev.t) && /^[a-zçğıöşü]/.test(w.t)) prev.t = prev.t.slice(0, -1) + w.t;
-      else if (j === 0 && prev && state.score && shouldJoin(prev.t, w.t, state.score)) prev.t = prev.t + w.t;
-      else words.push({ ...w });
+      if (j === 0 && prev && /[A-Za-zçğıöşüÇĞİÖŞÜ]-$/.test(prev.t) && /^[a-zçğıöşü]/.test(w.t)) prev.t = prev.t.slice(0,-1) + w.t;
+      else if (j === 0 && prev && !(prev.agree && w.agree) && state.score && shouldJoin(prev.t,w.t,state.score)) prev.t = prev.t + w.t;
+      else words.push({ ...w, p:n.page });
     });
   }
   return words;
@@ -355,7 +369,11 @@ function noteText(n) {
 function renderPreview(sections) {
   const root = $("preview");
   root.innerHTML = "";
-  sections.forEach((s, si) => {
+  lowIdx = -1;
+  reviewPage = 0;
+  $("review-source").textContent = "";
+  $("show-source").hidden = true;
+  sections.forEach(s => {
     const sec = document.createElement("div");
     sec.className = "sec";
     sec.dataset.kind = s.kind;
@@ -380,6 +398,7 @@ function renderPreview(sections) {
     head.append(badge);
     const body = document.createElement("div");
     body.className = "sec-body";
+    const noteLabels = new Map(s.notes.map(n => [n.id,n.mark]));
     for (const p of s.paras) {
       if (!p.words.length) continue;
       const el = document.createElement("p");
@@ -387,7 +406,7 @@ function renderPreview(sections) {
       el.contentEditable = "true";
       el.spellcheck = false;
       el.lang = "tr";
-      el.innerHTML = wordsToHtml(p.words);
+      el.innerHTML = wordsToHtml(p.words,noteLabels);
       body.append(el);
     }
     if (s.notes.length) {
@@ -397,8 +416,8 @@ function renderPreview(sections) {
         const el = document.createElement("p");
         el.contentEditable = "true";
         el.dataset.note = n.id;
-        el.dataset.linked = s.paras.some((p) => p.words.some((w) => w.ref === n.id)) ? "1" : "";
-        el.innerHTML = `<sup class="ref" contenteditable="false">*</sup> ` + wordsToHtml(noteText(n));
+        el.dataset.noteLabel = n.mark || "*";
+        el.innerHTML = `<sup class="ref" contenteditable="false">${escapeXml(n.mark || "*")}</sup> ` + wordsToHtml(noteText(n));
         nb.append(el);
       });
       body.append(nb);
@@ -409,7 +428,7 @@ function renderPreview(sections) {
   updateLowCount();
 }
 
-let lowIdx = -1;
+let lowIdx = -1, reviewPage = 0;
 function updateLowCount() {
   const marks = [...document.querySelectorAll("#preview .sec:not(.removed) mark")];
   $("low-count").textContent = marks.length;
@@ -421,7 +440,45 @@ $("next-low").addEventListener("click", () => {
   lowIdx = (lowIdx + 1) % marks.length;
   const m = marks[lowIdx];
   m.classList.add("current");
+  reviewPage = Number(m.dataset.page);
+  $("review-source").textContent = reviewPage ? `Kaynak PDF sayfası: ${reviewPage}` : "";
+  $("show-source").hidden = !reviewPage;
   m.scrollIntoView({ behavior: "smooth", block: "center" });
+});
+
+const sourceDialog = $("source-dialog");
+let sourceRequest = 0;
+$("show-source").addEventListener("click",async () => {
+  const doc = state.pdf?.doc, n = reviewPage;
+  if (!doc || !n || sourceDialog.open) return;
+  const request = ++sourceRequest;
+  const title = $("source-title");
+  title.textContent = `PDF · Sayfa ${n}`;
+  $("source-status").textContent = "Sayfa hazırlanıyor…";
+  sourceDialog.showModal();
+  let page, canvas;
+  try {
+    page = await doc.getPage(n);
+    ({canvas} = await renderPage(page,{dpi:135,maxSide:1550}));
+    if (request !== sourceRequest || !sourceDialog.open) return;
+    canvas.setAttribute("role","img");
+    canvas.setAttribute("aria-label",title.textContent);
+    $("source-image").append(canvas);
+    canvas = null;
+    $("source-status").textContent = "";
+  } catch {
+    if (request === sourceRequest) $("source-status").textContent = "Kaynak sayfa gösterilemedi.";
+  } finally {
+    if (canvas) canvas.width = canvas.height = 0;
+    page?.cleanup();
+  }
+});
+$("close-source").addEventListener("click",() => sourceDialog.close());
+sourceDialog.addEventListener("close",() => {
+  sourceRequest++;
+  const canvas = $("source-image").querySelector("canvas");
+  if (canvas) canvas.width = canvas.height = 0;
+  $("source-image").replaceChildren();
 });
 // Düzeltilen şüpheli kelimenin işaretini kaldır
 $("preview").addEventListener("input", (e) => {
@@ -433,19 +490,30 @@ $("preview").addEventListener("input", (e) => {
 
 function readSegments(el) {
   const segs = [];
+  function add(text) {
+    const clean = normalizeText(text).replace(/\s+/g," ");
+    const last = segs.at(-1);
+    if (last && last.text != null) last.text = (last.text + clean).replace(/ {2,}/g," ");
+    else segs.push({text:clean});
+  }
   const walk = (node) => {
     for (const ch of node.childNodes) {
-      if (ch.nodeType === 3) segs.push({ text: ch.nodeValue });
+      if (ch.nodeType === 3) add(ch.nodeValue);
       else if (ch.nodeType === 1) {
-        if (ch.matches("sup.ref")) { if (ch.dataset.ref) segs.push({ ref: parseInt(ch.dataset.ref, 10) }); }
-        else if (ch.tagName === "BR") segs.push({ text: " " });
-        else walk(ch);
+        if (ch.matches("sup.ref")) {
+          if (ch.dataset.ref) segs.push({ref:parseInt(ch.dataset.ref,10),label:ch.textContent});
+        } else if (ch.tagName === "BR") add(" ");
+        else {
+          const block = ["DIV","P","LI"].includes(ch.tagName);
+          if (block && segs.length) add(" ");
+          walk(ch);
+          if (block) add(" ");
+        }
       }
     }
   };
   walk(el);
-  // boşlukları sadeleştir
-  segs.forEach((g) => { if (g.text != null) g.text = normalizeText(g.text).replace(/\s+/g, " "); });
+  for (const g of segs) if (g.text != null) g.text = g.text.replace(/ +([,.;:!?…])(?=\s|$)/g,"$1");
   return segs;
 }
 
@@ -468,9 +536,8 @@ $("download").addEventListener("click", async () => {
       const paras = [...sec.querySelectorAll(".sec-body > p")].map((p) => ({ cls: p.className || "", segs: readSegments(p) }));
       const notes = [...sec.querySelectorAll(".notes p")].map((p) => {
         const segs = readSegments(p).filter((g) => g.text != null);
-        return { id: parseInt(p.dataset.note, 10), linked: !!p.dataset.linked, label: "*", text: segs.map((g) => g.text).join("").trim() };
+        return {id:parseInt(p.dataset.note,10), label:p.dataset.noteLabel, text:segs.map(g => g.text).join("").trim()};
       });
-      paras.forEach((p) => p.segs.forEach((g) => { if (g.ref) g.label = "*"; }));
       sections.push({ title, kind: sec.dataset.kind, paras, notes });
     });
     const blob = await buildEpub(meta, sections, state.cover);
