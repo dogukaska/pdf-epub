@@ -6,7 +6,7 @@ Taranmış ya da dijital PDF kitapları, Türkçe karakterleri (ı, İ, ş, ğ, 
 
 ## Nasıl çalışır?
 
-1. **Sayfa başına metin seçimi.** Okunabilir PDF metni korunur. Taranmış veya bozuk metin katmanlı sayfalar Türkçe OCR ile okunur. İlk sayfa açıkça kapak olarak seçilmedikçe metne dahil edilir.
+1. **Sayfa başına metin seçimi.** Okunabilir PDF metni korunur. Taranmış veya bozuk metin katmanlı sayfalar Türkçe OCR ile okunur. İlk ve son sayfa ayrı ayrı kapak olarak seçilebilir. İşaretlenen sayfalar EPUB’a renkli PNG olarak eklenir ve metin dönüşümüne girmez.
 2. **OCR denetimi.** Uygun olduğunda PDF metni ve Türkçe sözlük karşılaştırılır. Önerilen mod, şüpheli satırları daha yüksek çözünürlükte yeniden okur.
 3. **Sayfa düzeni.** Düzenli çift sütunlar okuma sırasına alınır. Paragraf, başlık ve dipnot ayrımı yapılır. Üst bilgi temizliği sayfanın kenarındaki belirgin tekrarlarla sınırlıdır.
 4. **Kontrol ekranı.** Şüpheli kelimeler sarı görünür. Sonraki kelimeye geçtiğinde kaynak PDF sayfasını açabilirsin. Düşük kaliteli taramalarda gözden geçirme özellikle önemlidir.

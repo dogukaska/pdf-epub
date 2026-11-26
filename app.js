@@ -1,13 +1,13 @@
-import { openPdf, pageImageCoverage, textLayerLines, renderPage, renderCover } from "./lib/pdfsource.js?v=20261126e";
+import { openPdf, pageImageCoverage, textLayerLines, renderPage, renderCover } from "./lib/pdfsource.js?v=20261126f";
 import { createOcrPool } from "./lib/ocr.js?v=20261126e";
 import { loadDict } from "./lib/dict.js?v=20261126e";
 import { reconcilePage, buildBookVocab, makeScorer, correctWord, needsRescan, applyRescan, finalConfidence, markFragments, shouldJoin } from "./lib/reconcile.js?v=20261126e";
 import { analyze } from "./lib/layout.js?v=20261126e";
-import { buildEpub } from "./lib/epub.js?v=20261126e";
+import { buildEpub } from "./lib/epub.js?v=20261126f";
 import { normalizeText, hasMojibake, fixMojibake, textQuality, typography, escapeXml } from "./lib/turkish.js?v=20261126e";
 
 const $ = (id) => document.getElementById(id);
-const state = { file: null, pdf: null, pages: null, cover: null, sections: null };
+const state = { file: null, pdf: null, pages: null, covers: null, sections: null };
 let fileRequest = 0;
 let converting = false;
 
@@ -30,11 +30,11 @@ async function pickFile(file) {
   if (converting) return;
   const request = ++fileRequest;
   const previous = state.pdf;
-  Object.assign(state, { file: null, pdf: null, pages: null, cover: null, sections: null });
+  Object.assign(state, { file: null, pdf: null, pages: null, covers: null, sections: null });
   for (const id of ["step-opts", "step-run", "step-review"]) $(id).classList.add("hidden");
   $("preview").replaceChildren();
   for (const id of ["m-title", "m-author", "m-translator", "m-publisher"]) $(id).value = "";
-  $("o-back").checked = false;
+  $("o-cover").checked = $("o-back").checked = false;
   previous?.doc.destroy().catch(console.error);
   $("drop-text").textContent = `${file.name} açılıyor…`;
   $("file-status").textContent = "";
@@ -117,6 +117,10 @@ async function convert() {
   const mode = $("o-mode").value;            // "best" | "fast"
   const dpi = parseInt($("o-dpi").value, 10);
   const coverFirst = $("o-cover").checked;
+  const backCoverLast = $("o-back").checked;
+  const firstPage = coverFirst ? 2 : 1;
+  const lastPage = backCoverLast ? numPages - 1 : numPages;
+  if (firstPage > lastPage) throw Error("Metne dönüştürülecek en az bir sayfa bırak. Kapak seçimlerini değiştir.");
   const dictPromise = loadDict(new URL("lang/tr-words.txt.gz", location.href).href);
   dictPromise.catch(() => {});
 
@@ -124,6 +128,10 @@ async function convert() {
   const pages = [];
   let repairedPages = 0;
   for (let i = 1; i <= numPages; i++) {
+    if (i < firstPage || i > lastPage) {
+      pages.push({n:i, layer:{lines:[],width:0,height:0}});
+      continue;
+    }
     setStatus(`PDF inceleniyor: sayfa ${i}/${numPages}`, (i / numPages) * 0.05);
     const page = await doc.getPage(i);
     const cov = await pageImageCoverage(page).catch(() => 0);
@@ -152,16 +160,26 @@ async function convert() {
       page.cleanup();
     }
   }
-  const work = pages.filter(p => !(coverFirst && p.n === 1));
-  if (!work.length) throw Error("Bu PDF tek sayfalı. Metni çevirmek için kapak seçimini kaldır.");
+  const work = pages.slice(firstPage - 1,lastPage);
   const scanPages = work.filter(p => !p.trusted);
   const useOcr = scanPages.length > 0;
 
   // 2) Kapak
-  if (coverFirst) {
-    setStatus("Kapak hazırlanıyor…", 0.05);
-    state.cover = await renderCover(await doc.getPage(1)).catch(() => null);
-  } else state.cover = null;
+  const covers = {};
+  async function loadCover(n,label) {
+    setStatus(label+" hazırlanıyor…",0.05);
+    const page = await doc.getPage(n);
+    try {
+      const image = await renderCover(page);
+      if (!image) throw Error();
+      return image;
+    } catch {
+      throw Error(label+" görsele dönüştürülemedi.");
+    } finally { page.cleanup(); }
+  }
+  if (coverFirst) covers.front = await loadCover(1,"Ön kapak");
+  if (backCoverLast) covers.back = await loadCover(numPages,"Arka kapak");
+  state.covers = covers;
 
   setStatus("Türkçe sözlük yükleniyor…", 0.05);
   await dictPromise.catch((e) => console.warn("sözlük yok", e));
@@ -270,7 +288,7 @@ async function convert() {
 
   // 8) Yapıyı çıkar
   setStatus("Bölümler ve paragraflar düzenleniyor…", 0.97);
-  state.pages = pages.map(p => {
+  state.pages = pages.slice(0,lastPage).map(p => {
     if (!p.ocr) return p.layer;
     const { lines,width,height,pxPerPt } = p.ocr;
     const size = key => key / pxPerPt;
@@ -278,7 +296,7 @@ async function convert() {
       ...l, x0:size(l.x0), x1:size(l.x1), y0:size(l.y0), y1:size(l.y1), h:size(l.h),
     }))};
   });
-  const { sections } = analyze(state.pages, { coverFirst, backCoverLast: $("o-back").checked, score });
+  const { sections } = analyze(state.pages, { coverFirst, score });
   if (!sections.some(s => s.paras.some(p => p.words.length) || s.notes.length)) throw Error("EPUB oluşturmak için okunabilir metin bulunamadı.");
 
   // 7) Birleştirilmiş tam kelimeleri sözlük ve kitabın kendi kelimeleriyle düzelt
@@ -310,6 +328,10 @@ async function convert() {
   const chapters = sections.filter((s) => s.kind === "chapter").length;
   const paras = sections.reduce((n, s) => n + s.paras.length, 0);
   const parts = [`${numPages} sayfa ${fmtTime(secs)} içinde işlendi`];
+  if (covers.front || covers.back) {
+    const labels = [covers.front && "ön kapak",covers.back && "arka kapak"].filter(Boolean);
+    parts.push(labels.join(" ve ") + " renkli görsel olarak eklendi");
+  }
   if (work.length > scanPages.length) parts.push(`${work.length - scanPages.length} sayfada PDF metni korundu`);
   if (useOcr) parts.push(`${scanPages.length} sayfa Türkçe OCR ile incelendi`);
   if (repairedPages) parts.push(`${repairedPages} sayfada Türkçe kodlama düzeltildi`);
@@ -540,7 +562,7 @@ $("download").addEventListener("click", async () => {
       });
       sections.push({ title, kind: sec.dataset.kind, paras, notes });
     });
-    const blob = await buildEpub(meta, sections, state.cover);
+    const blob = await buildEpub(meta, sections, state.covers);
     const name = asciiName(meta.title || "kitap") + ".epub";
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);

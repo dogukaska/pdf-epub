@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#efede8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1f2022" media="(prefers-color-scheme: dark)">
 <script src="/theme.js?v=20261126c"></script>
-<link rel="stylesheet" href="style.css?v=20261126e">
+<link rel="stylesheet" href="style.css?v=20261126f">
 <script src="vendor/jszip.min.js"></script>
 <script src="vendor/tesseract/tesseract.min.js"></script>
 <link rel="stylesheet" href="/ui-compact.css?v=20261126d">
@@ -42,10 +42,14 @@
       <label>Çevirmen <small>(isteğe bağlı)</small><input id="m-translator" type="text"></label>
       <label>Yayınevi <small>(isteğe bağlı)</small><input id="m-publisher" type="text"></label>
     </div>
+    <fieldset class="cover-options">
+      <legend>Kapaklar <small>(isteğe bağlı)</small></legend>
+      <label class="row"><input type="checkbox" id="o-cover"> İlk sayfa ön kapak</label>
+      <label class="row"><input type="checkbox" id="o-back"> Son sayfa arka kapak</label>
+      <p class="hint">İşaretlenen kapaklar renkli görsel olarak eklenir.</p>
+    </fieldset>
     <details class="adv">
       <summary>Gelişmiş ayarlar</summary>
-      <label class="row"><input type="checkbox" id="o-cover"> 1. sayfayı yalnızca kapak olarak kullan</label>
-      <label class="row"><input type="checkbox" id="o-back"> Son sayfa arka kapak yazısı olsun</label>
       <label>Okuma yöntemi
         <select id="o-mode">
           <option value="best" selected>Önerilen: PDF metnini koru, taramaları denetle</option>
@@ -97,6 +101,6 @@
   <p>Açık kaynak · Tesseract OCR (Türkçe), PDF.js ve JSZip kullanır · <a href="https://github.com/dogukaska/pdf-epub">GitHub</a></p>
 </footer>
 
-<script type="module" src="app.js?v=20261126e"></script>
+<script type="module" src="app.js?v=20261126f"></script>
 </body>
 </html>
