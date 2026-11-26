@@ -7,7 +7,7 @@ import { buildEpub } from "./lib/epub.js?v=20261126f";
 import { normalizeText, hasMojibake, fixMojibake, textQuality, typography, escapeXml } from "./lib/turkish.js?v=20261126e";
 
 const $ = (id) => document.getElementById(id);
-const state = { file: null, pdf: null, pages: null, covers: null, sections: null };
+const state = { file: null, pdf: null, pages: null, scannedCovers: null, covers: null, sections: null };
 let fileRequest = 0;
 let converting = false;
 
@@ -26,15 +26,14 @@ function guessTitle(name) {
   return name.replace(/\.pdf$/i, "").replace(/[_]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
-async function pickFile(file) {
+async function pickFile(file, scannedCovers = null) {
   if (converting) return;
   const request = ++fileRequest;
   const previous = state.pdf;
-  Object.assign(state, { file: null, pdf: null, pages: null, covers: null, sections: null });
+  Object.assign(state, { file: null, pdf: null, pages: null, scannedCovers: null, covers: null, sections: null });
   for (const id of ["step-opts", "step-run", "step-review"]) $(id).classList.add("hidden");
   $("preview").replaceChildren();
   for (const id of ["m-title", "m-author", "m-translator", "m-publisher"]) $(id).value = "";
-  $("o-cover").checked = $("o-back").checked = false;
   previous?.doc.destroy().catch(console.error);
   $("drop-text").textContent = `${file.name} açılıyor…`;
   $("file-status").textContent = "";
@@ -48,6 +47,7 @@ async function pickFile(file) {
     }
     state.pdf = pdf;
     state.file = file;
+    state.scannedCovers = scannedCovers;
   } catch (e) {
     if (request !== fileRequest) return;
     $("drop-text").textContent = "Başka bir dosya seç veya buraya sürükle";
@@ -116,11 +116,11 @@ async function convert() {
   const { doc, numPages } = state.pdf;
   const mode = $("o-mode").value;            // "best" | "fast"
   const dpi = parseInt($("o-dpi").value, 10);
-  const coverFirst = $("o-cover").checked;
-  const backCoverLast = $("o-back").checked;
+  const coverFirst = state.scannedCovers?.front === true;
+  const backCoverLast = state.scannedCovers?.back === true;
   const firstPage = coverFirst ? 2 : 1;
   const lastPage = backCoverLast ? numPages - 1 : numPages;
-  if (firstPage > lastPage) throw Error("Metne dönüştürülecek en az bir sayfa bırak. Kapak seçimlerini değiştir.");
+  if (firstPage > lastPage) throw Error("EPUB için Belge Tarayıcı’da en az bir iç sayfa ekle.");
   const dictPromise = loadDict(new URL("lang/tr-words.txt.gz", location.href).href);
   dictPromise.catch(() => {});
 
@@ -178,6 +178,10 @@ async function convert() {
     } finally { page.cleanup(); }
   }
   if (coverFirst) covers.front = await loadCover(1,"Ön kapak");
+  // Dosyadan açılan kitaplarda ilk sayfa eskisi gibi kapak görselidir; metni de işlenir.
+  if (!state.scannedCovers && numPages > 1) {
+    covers.front = await loadCover(1,"Ön kapak").catch(() => null);
+  }
   if (backCoverLast) covers.back = await loadCover(numPages,"Arka kapak");
   state.covers = covers;
 
@@ -604,6 +608,6 @@ $("restart").addEventListener("click", () => location.reload());
       g.onsuccess = () => { res(g.result); s.delete("son"); };
       g.onerror = () => rej(g.error);
     });
-    if (item && item.blob) pickFile(new File([item.blob], item.name || "kitap.pdf", { type: "application/pdf" }));
+    if (item && item.blob) pickFile(new File([item.blob], item.name || "kitap.pdf", { type: "application/pdf" }), item.covers ?? {});
   } catch (e) { console.error(e); }
 })();
