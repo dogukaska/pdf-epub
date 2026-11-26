@@ -38,4 +38,4 @@ Yerelde denemek için: `python3 -m http.server` ve tarayıcıda `http://localhos
 
 Uygulama kodu MIT lisanslıdır. Kullanılan kütüphaneler: [PDF.js](https://github.com/mozilla/pdf.js) (Apache 2.0), [tesseract.js](https://github.com/naptha/tesseract.js) (Apache 2.0), [Tesseract tessdata](https://github.com/tesseract-ocr/tessdata) (Apache 2.0), [JSZip](https://github.com/Stuk/jszip) (MIT). Türkçe sözlük, [FrequencyWords](https://github.com/hermitdave/FrequencyWords) (Hermit Dave, CC BY-SA 4.0, OpenSubtitles verisi) listesinden türetilmiştir. Lisans metinleri `vendor/` klasöründedir.
 
-Türkçe PDF’den EPUB’a dönüştürme ve renkli kapak aktarımı OpenAI Codex desteğiyle geliştirildi ve test edildi.
+Türkçe PDF’den EPUB’a dönüştürücünün geliştirilmesine Claude, dönüştürme ve renkli kapak aktarımının geliştirme ve test çalışmalarına OpenAI Codex katkıda bulundu.
