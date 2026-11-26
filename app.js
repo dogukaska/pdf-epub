@@ -8,10 +8,16 @@ import { normalizeText, hasMojibake, fixMojibake, textQuality, typography, escap
 
 const $ = (id) => document.getElementById(id);
 const state = { file: null, pdf: null, pages: null, cover: null, sections: null };
+let fileRequest = 0;
+let converting = false;
 
 // ---------- Dosya seçimi
 const drop = $("drop");
-$("file").addEventListener("change", (e) => e.target.files[0] && pickFile(e.target.files[0]));
+$("file").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (file) pickFile(file);
+});
 ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
 ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
 drop.addEventListener("drop", (e) => { const f = e.dataTransfer.files[0]; if (f) pickFile(f); });
@@ -21,16 +27,37 @@ function guessTitle(name) {
 }
 
 async function pickFile(file) {
-  if (!/pdf$/i.test(file.type) && !/\.pdf$/i.test(file.name)) { alert("Lütfen bir PDF dosyası seç."); return; }
-  state.file = file;
-  $("drop-text").textContent = `${file.name} (${(file.size / 1048576).toFixed(1)} MB)`;
+  if (converting) return;
+  const request = ++fileRequest;
+  const previous = state.pdf;
+  Object.assign(state, { file: null, pdf: null, pages: null, cover: null, sections: null });
+  for (const id of ["step-opts", "step-run", "step-review"]) $(id).classList.add("hidden");
+  $("preview").replaceChildren();
+  for (const id of ["m-title", "m-author", "m-translator", "m-publisher"]) $(id).value = "";
+  $("o-back").checked = backTouched = false;
+  previous?.doc.destroy().catch(console.error);
+  $("drop-text").textContent = `${file.name} açılıyor…`;
+  $("file-status").textContent = "";
   try {
-    state.pdf = await openPdf(await file.arrayBuffer());
+    if (!/pdf$/i.test(file.type) && !/\.pdf$/i.test(file.name)) throw new Error("Lütfen bir PDF dosyası seç.");
+    if (!file.size) throw new Error("Bu PDF dosyası boş.");
+    const pdf = await openPdf(await file.arrayBuffer());
+    if (request !== fileRequest) {
+      await pdf.doc.destroy();
+      return;
+    }
+    state.pdf = pdf;
+    state.file = file;
   } catch (e) {
-    console.error(e);
-    alert("Bu PDF açılamadı. Dosya bozuk ya da şifreli olabilir.");
+    if (request !== fileRequest) return;
+    $("drop-text").textContent = "Başka bir dosya seç veya buraya sürükle";
+    $("file-status").textContent = file.size && (/pdf$/i.test(file.type) || /\.pdf$/i.test(file.name))
+      ? "PDF açılamadı. Dosya bozuk ya da şifreli olabilir."
+      : e.message;
     return;
   }
+  $("file-status").textContent = "";
+  $("drop-text").textContent = `${file.name} (${(file.size / 1048576).toFixed(1)} MB)`;
   const info = state.pdf.info || {};
   const clean = (s) => (s ? normalizeText(String(s)).trim() : "");
   $("m-title").value = clean(info.Title) && !/^(untitled|about:blank|microsoft word|adsız)|\.(docx?|pdf|indd|odt)$/i.test(info.Title.trim()) ? clean(info.Title) : guessTitle(file.name);
@@ -43,13 +70,20 @@ async function pickFile(file) {
 // ---------- Dönüştürme
 let backTouched = false;
 $("o-back").addEventListener("change", () => (backTouched = true));
-$("go").addEventListener("click", () => convert().catch((e) => {
-  console.error(e);
-  setStatus("Bir hata oluştu: " + (e.message || e));
-  $("go").disabled = false;
-  keepAwake(false);
-  if (activePool) { activePool.terminate().catch(() => {}); activePool = null; }
-}));
+$("go").addEventListener("click", async () => {
+  if (converting || !state.pdf) return;
+  converting = $("file").disabled = $("go").disabled = true;
+  try {
+    await convert();
+  } catch (e) {
+    console.error(e);
+    setStatus("Bir hata oluştu: " + (e.message || e));
+  } finally {
+    if (activePool) { await activePool.terminate().catch(() => {}); activePool = null; }
+    await keepAwake(false);
+    converting = $("file").disabled = $("go").disabled = false;
+  }
+});
 let activePool = null;
 
 function setStatus(t, frac) {
@@ -75,7 +109,6 @@ function poolSize() {
 }
 
 async function convert() {
-  $("go").disabled = true;
   $("step-run").classList.remove("hidden");
   $("step-review").classList.add("hidden");
   $("step-run").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -276,8 +309,6 @@ async function convert() {
   $("step-run").classList.add("hidden");
   $("step-review").classList.remove("hidden");
   $("step-review").scrollIntoView({ behavior: "smooth", block: "start" });
-  $("go").disabled = false;
-  keepAwake(false);
 }
 
 const tick = () => new Promise((r) => setTimeout(r, 0));
