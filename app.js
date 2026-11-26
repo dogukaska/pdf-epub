@@ -60,7 +60,9 @@ async function pickFile(file, scannedCovers = null) {
   $("drop-text").textContent = `${file.name} (${(file.size / 1048576).toFixed(1)} MB)`;
   const info = state.pdf.info || {};
   const clean = (s) => (s ? normalizeText(String(s)).trim() : "");
-  $("m-title").value = clean(info.Title) && !/^(untitled|about:blank|microsoft word|adsız)|\.(docx?|pdf|indd|odt)$/i.test(info.Title.trim()) ? clean(info.Title) : guessTitle(file.name);
+  const title = clean(info.Title);
+  $("m-title").value = title && !/^(untitled|about:blank|microsoft word|adsız)$|\.(docx?|pdf|indd|odt)$/i.test(title)
+    ? title : guessTitle(file.name);
   $("m-author").value = clean(info.Author);
   $("pdf-info").textContent = `${state.pdf.numPages} sayfa bulundu.`;
   $("step-opts").classList.remove("hidden");
