@@ -592,10 +592,17 @@ $("restart").addEventListener("click", () => location.reload());
 
 // Belge Tarayıcı'dan "EPUB'a çevir" ile gelen kitap (aynı adres, ortak depo)
 (async () => {
-  if (new URLSearchParams(location.search).get("kaynak") !== "belge") return;
-  history.replaceState(null, "", location.pathname);
+  const params = new URLSearchParams(location.search);
+  if (params.get("kaynak") !== "belge") return;
+  const key = params.get("aktarim") || "son";
+  if (params.has("aktarim") && !/^[0-9a-f-]{36}$/i.test(key)) {
+    $("file-status").textContent = "PDF aktarım adresi geçersiz. Belge Tarayıcı’dan yeniden gönder.";
+    return;
+  }
+  const request = fileRequest;
+  let db;
   try {
-    const db = await new Promise((res, rej) => {
+    db = await new Promise((res, rej) => {
       const r = indexedDB.open("paylasim", 1);
       r.onupgradeneeded = () => r.result.createObjectStore("dosyalar");
       r.onsuccess = () => res(r.result);
@@ -604,10 +611,20 @@ $("restart").addEventListener("click", () => location.reload());
     const item = await new Promise((res, rej) => {
       const t = db.transaction("dosyalar", "readwrite");
       const s = t.objectStore("dosyalar");
-      const g = s.get("son");
-      g.onsuccess = () => { res(g.result); s.delete("son"); };
-      g.onerror = () => rej(g.error);
+      const g = s.get(key);
+      g.onsuccess = () => { if (g.result) s.delete(key); };
+      t.oncomplete = () => res(g.result);
+      t.onabort = () => rej(t.error);
     });
-    if (item && item.blob) pickFile(new File([item.blob], item.name || "kitap.pdf", { type: "application/pdf" }), item.covers ?? {});
-  } catch (e) { console.error(e); }
+    params.delete("kaynak");
+    params.delete("aktarim");
+    const query = params.toString();
+    history.replaceState(null, "", location.pathname + (query ? "?" + query : "") + location.hash);
+    if (request !== fileRequest) return;
+    const data = item?.bytes || item?.blob;
+    if (!data) throw new Error("Aktarılmış PDF bulunamadı.");
+    await pickFile(new File([data], item.name || "kitap.pdf", { type: "application/pdf" }), item.covers ?? {});
+  } catch {
+    if (request === fileRequest) $("file-status").textContent = "Aktarılan PDF açılamadı. Belge Tarayıcı’dan yeniden gönder veya bir PDF seç.";
+  } finally { db?.close(); }
 })();
