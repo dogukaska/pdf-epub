@@ -6,17 +6,13 @@ Taranmış ya da dijital PDF kitapları, Türkçe karakterleri (ı, İ, ş, ğ, 
 
 ## Nasıl çalışır?
 
-Uygulama her kitabı **iki kez tarar ve üç kaynakla doğrular**:
+1. **Sayfa başına metin seçimi.** Okunabilir PDF metni korunur. Taranmış veya bozuk metin katmanlı sayfalar Türkçe OCR ile okunur. İlk sayfa açıkça kapak olarak seçilmedikçe metne dahil edilir.
+2. **OCR denetimi.** Uygun olduğunda PDF metni ve Türkçe sözlük karşılaştırılır. Önerilen mod, şüpheli satırları daha yüksek çözünürlükte yeniden okur.
+3. **Sayfa düzeni.** Düzenli çift sütunlar okuma sırasına alınır. Paragraf, başlık ve dipnot ayrımı yapılır. Üst bilgi temizliği sayfanın kenarındaki belirgin tekrarlarla sınırlıdır.
+4. **Kontrol ekranı.** Şüpheli kelimeler sarı görünür. Sonraki kelimeye geçtiğinde kaynak PDF sayfasını açabilirsin. Düşük kaliteli taramalarda gözden geçirme özellikle önemlidir.
+5. **EPUB 3.** İçindekiler, tıklanabilir dipnotlar, Türkçe dil bilgisi ve yeniden akışa uygun metin üretilir.
 
-1. **1. tarama: Türkçe OCR.** Her sayfa (dijital PDF'ler dahil) Tesseract'ın Türkçe modeliyle 300 dpi'da okunur.
-2. **PDF'in kendi metniyle karşılaştırma.** OCR sonucu, PDF'teki metinle kelime kelime hizalanır. İkisi aynıysa kelime kesinleşir. Biri bozuksa (ör. `GO▯UNMEYEN`, `SE l\IZ`, `8itap`, `ý þ ð`) diğeri seçilir.
-3. **Türkçe sözlük kontrolü.** Yaklaşık 630 bin kelime biçimlik bir sıklık sözlüğü ve kitabın kendi kelimeleri kullanılır. Tipik OCR karışıklıkları düzeltilir: `rn`/`m`, `g`/`ğ`, `s`/`ş`, `1`/`l`, `8`/`k`… Örnekler: `olaganüstü` → `olağanüstü`, `Jirnmie` → `Jimmie`, `çalışrnadan` → `çalışmadan`. Sözlükte olan gerçek kelimelere ve konuşma diline gereksiz yere dokunulmaz.
-4. **2. tarama.** Hâlâ şüpheli kelime içeren satırlar daha yüksek çözünürlükte (≈500 dpi) tek tek yeniden okunur.
-5. **Sayfa düzeni.** Üst bilgiler ve sayfa numaraları silinir. Satır sonu tireleri (gizli/yumuşak tireler dahil) birleştirilir, kaybolmuş tireler sözlükle bulunur (`basa` + `mağında` → `basamağında`). Girintili alıntı blokları tek paragraf olur. Bölüm başlıkları ve dipnotlar bulunur.
-6. **Kontrol ekranı.** Emin olunamayan birkaç kelime sarı ile gösterilir. Metin, bölüm adları düzeltilebilir.
-7. **EPUB 3.** Kapaklı, içindekiler listeli, tıklanabilir dipnotlu ve dili `tr` olarak işaretli bir dosya oluşturulur.
-
-"Hızlı" seçeneği tek tarama yapar. Dijital PDF'lerin metni temizse OCR'ı atlar.
+Temel metin ve paketleme kontrolleri: `node --test tests/text-and-epub.test.mjs`. Üretilen dosyalar [EPUBCheck](https://github.com/w3c/epubcheck) ile doğrulanabilir. OCR yerleşiminde [Tesseract kalite kılavuzundaki](https://tesseract-ocr.github.io/tessdoc/ImproveQuality.html) sayfa ve satır ayrımı kullanılır.
 
 ## Yayınlama (GitHub Pages)
 

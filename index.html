@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#efede8" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1f2022" media="(prefers-color-scheme: dark)">
 <script src="/theme.js?v=20261126c"></script>
-<link rel="stylesheet" href="style.css?v=20261125a">
+<link rel="stylesheet" href="style.css?v=20261126e">
 <script src="vendor/jszip.min.js"></script>
 <script src="vendor/tesseract/tesseract.min.js"></script>
 <link rel="stylesheet" href="/ui-compact.css?v=20261126d">
@@ -44,12 +44,12 @@
     </div>
     <details class="adv">
       <summary>Gelişmiş ayarlar</summary>
-      <label class="row"><input type="checkbox" id="o-cover" checked> 1. sayfa kapak resmi olsun</label>
+      <label class="row"><input type="checkbox" id="o-cover"> 1. sayfayı yalnızca kapak olarak kullan</label>
       <label class="row"><input type="checkbox" id="o-back"> Son sayfa arka kapak yazısı olsun</label>
       <label>Okuma yöntemi
         <select id="o-mode">
-          <option value="best" selected>En yüksek doğruluk: iki kez tara, sözlükle kontrol et (önerilen)</option>
-          <option value="fast">Hızlı: tek tarama</option>
+          <option value="best" selected>Önerilen: PDF metnini koru, taramaları denetle</option>
+          <option value="fast">Hızlı: taranmış sayfaları bir kez oku</option>
         </select>
       </label>
       <label>OCR kalitesi
@@ -67,8 +67,8 @@
   <section class="card hidden" id="step-run">
     <h2><span class="num">3</span> Dönüştürülüyor</h2>
     <div class="bar"><div id="bar-fill"></div></div>
-    <p id="status">Hazırlanıyor…</p>
-    <p class="hint">Her sayfa Türkçe OCR ile okunur, PDF'in kendi metniyle ve Türkçe sözlükle karşılaştırılır; emin olunamayan satırlar daha yüksek çözünürlükte yeniden taranır. 100 sayfalık bir kitap bilgisayarda birkaç dakika, telefonda daha uzun sürer. Bu sekmeyi kapatma.</p>
+    <p id="status" role="status">Hazırlanıyor…</p>
+    <p class="hint">Sağlam PDF metni korunur. Taranmış sayfalar Türkçe OCR ile okunur, şüpheli satırlar önerilen modda yeniden kontrol edilir.</p>
   </section>
 
   <section class="card hidden" id="step-review">
@@ -80,14 +80,23 @@
       <button id="restart">Yeni dosya</button>
     </div>
     <p class="hint">Aşağıdaki metne dokunup düzeltme yapabilirsin. <mark>İşaretli</mark> kelimeler okuma motorunun emin olmadığı yerlerdir. Bölüm adlarını da değiştirebilir, istemediğin bölümü silebilirsin.</p>
+    <div class="actions source-actions">
+      <span class="hint" id="review-source" role="status"></span>
+      <button id="show-source" class="ghost" type="button" hidden>Kaynağı göster</button>
+    </div>
     <div id="preview"></div>
   </section>
 </main>
+<dialog id="source-dialog" aria-labelledby="source-title">
+  <header><strong id="source-title">Kaynak PDF</strong><button id="close-source" type="button">Kapat</button></header>
+  <p id="source-status" role="status"></p>
+  <div id="source-image"></div>
+</dialog>
 
 <footer>
   <p>Açık kaynak · Tesseract OCR (Türkçe), PDF.js ve JSZip kullanır · <a href="https://github.com/dogukaska/pdf-epub">GitHub</a></p>
 </footer>
 
-<script type="module" src="app.js?v=20261126a"></script>
+<script type="module" src="app.js?v=20261126e"></script>
 </body>
 </html>
