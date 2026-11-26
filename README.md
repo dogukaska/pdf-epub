@@ -4,6 +4,8 @@ Taranmış ya da dijital PDF kitapları, Türkçe karakterleri (ı, İ, ş, ğ, 
 
 **Her şey tarayıcıda çalışır.** PDF dosyası hiçbir sunucuya yüklenmez.
 
+[PDF → EPUB aracını aç](https://dogukaska.github.io/pdf-epub/)
+
 ## Nasıl çalışır?
 
 1. **Sayfa başına metin seçimi.** Okunabilir PDF metni korunur. Taranmış veya bozuk metin katmanlı sayfalar Türkçe OCR ile okunur. Doğrudan açılan çok sayfalı PDF’lerin ilk sayfası otomatik kapak görseli olarak eklenir ve metni de işlenir. Belge Tarayıcı’nın Kitap sekmesinde seçilen ön ve arka kapaklar EPUB’a renkli görsel olarak aktarılır.
@@ -11,28 +13,6 @@ Taranmış ya da dijital PDF kitapları, Türkçe karakterleri (ı, İ, ş, ğ, 
 3. **Sayfa düzeni.** Düzenli çift sütunlar okuma sırasına alınır. Paragraf, başlık ve dipnot ayrımı yapılır. Üst bilgi temizliği sayfanın kenarındaki belirgin tekrarlarla sınırlıdır.
 4. **Kontrol ekranı.** Şüpheli kelimeler sarı görünür. Sonraki kelimeye geçtiğinde kaynak PDF sayfasını açabilirsin. Düşük kaliteli taramalarda gözden geçirme özellikle önemlidir.
 5. **EPUB 3.** İçindekiler, tıklanabilir dipnotlar, Türkçe dil bilgisi ve yeniden akışa uygun metin üretilir.
-
-Temel metin ve paketleme kontrolleri: `node --test tests/text-and-epub.test.mjs`. Üretilen dosyalar [EPUBCheck](https://github.com/w3c/epubcheck) ile doğrulanabilir. OCR yerleşiminde [Tesseract kalite kılavuzundaki](https://tesseract-ocr.github.io/tessdoc/ImproveQuality.html) sayfa ve satır ayrımı kullanılır.
-
-## Yayınlama (GitHub Pages)
-
-Depo ayarlarında **Settings → Pages → Branch: `main` / `(root)` → Save**. Birkaç dakika sonra uygulama
-`https://dogukaska.github.io/pdf-epub/` adresinde açılır.
-
-Yerelde denemek için: `python3 -m http.server` ve tarayıcıda `http://localhost:8000`.
-
-## Dosyalar
-
-- `index.html`, `style.css`, `app.js`: arayüz
-- `lib/pdfsource.js`: PDF okuma (PDF.js)
-- `lib/ocr.js`: Türkçe OCR (tesseract.js)
-- `lib/reconcile.js`: OCR + PDF metni + sözlük doğrulaması, ikinci tarama kararları
-- `lib/dict.js`: Türkçe sıklık sözlüğü (ikili arama, düşük bellek)
-- `lib/layout.js`: başlık, paragraf, dipnot ve sayfa numarası algılama
-- `lib/turkish.js`: Türkçe karakter düzeltmeleri, tipografik tırnaklar
-- `lib/epub.js`: EPUB üretimi (JSZip)
-- `lang/tur.traineddata.gz`: Tesseract Türkçe dil modeli
-- `lang/tr-words.txt.gz`: Türkçe kelime sıklık listesi
 
 ## Lisanslar
 
